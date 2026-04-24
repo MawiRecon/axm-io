@@ -127,6 +127,30 @@
 
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
+
+  /* ===== Monday fetch row (item ID input + fetch + settings gear) ===== */
+  .monday-row{display:flex;gap:8px;align-items:stretch;margin-bottom:4px}
+  .monday-row input{flex:1;min-width:0}
+  .monday-row button.icon{padding:0;width:38px;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--muted);border:1px solid var(--line)}
+  .monday-row button.icon:hover{color:var(--ink);background:var(--panel-2);border-color:#4D4D49}
+  .monday-row button.icon svg{width:16px;height:16px}
+  .monday-hint{font-size:12px;color:var(--faint);margin-top:4px;display:flex;align-items:center;gap:6px}
+  .monday-hint.ok{color:#A7D4BC}
+  .or-divider{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--faint);font-size:11.5px;text-transform:uppercase;letter-spacing:.1em}
+  .or-divider::before,.or-divider::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+
+  /* ===== Modal for Monday token config ===== */
+  .modal-scrim{position:fixed;inset:0;background:rgba(20,20,18,0.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .12s ease}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+  .modal h3{margin:0 0 6px;font-size:15px;font-weight:600;color:var(--ink)}
+  .modal .mdesc{color:var(--muted);font-size:13px;line-height:1.55;margin-bottom:16px}
+  .modal .mdesc a{color:var(--accent)}
+  .modal label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px;font-weight:500}
+  .modal input{width:100%}
+  .modal .token-saved{font-size:12.5px;color:#A7D4BC;padding:8px 10px;background:var(--ok-tint);border:1px solid rgba(110,159,131,0.3);border-radius:8px;margin-bottom:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+  .modal-actions .left{margin-right:auto}
 </style>
 </head>
 <body>
@@ -141,7 +165,19 @@
 <div class="wrap">
 
 <div class="panel">
-  <h2>1. Drop submission PDF</h2>
+  <h2>1. Load submission</h2>
+
+  <div class="monday-row">
+    <input id="monday_item" type="text" placeholder="Monday item ID (e.g. 11798352671)" inputmode="numeric" autocomplete="off">
+    <button id="monday_fetch">Fetch from Monday</button>
+    <button id="monday_settings" class="icon" type="button" title="Configure Monday connection" aria-label="Monday settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+  <div id="monday_hint" class="monday-hint">Paste an item ID from the <code style="background:var(--panel-2);padding:1px 5px;border-radius:4px;font-size:11.5px">🟨Ax Submissions</code> board, then press Fetch.</div>
+
+  <div class="or-divider">or</div>
+
   <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload submission PDF">
     <button id="dzreset" class="reset" type="button" style="display:none">&times; reset</button>
     <div id="dzbig" class="big">Drop the submission PDF here</div>
@@ -243,6 +279,25 @@
 
 <!-- IO render is created on-demand in generatePdf() and removed after capture — no static element. -->
 
+<!-- Monday connection settings modal (shown when the gear icon is clicked) -->
+<div id="monday_modal" class="modal-scrim" style="display:none" role="dialog" aria-modal="true" aria-labelledby="mm_title">
+  <div class="modal">
+    <h3 id="mm_title">Monday.com connection</h3>
+    <div class="mdesc">
+      Paste your personal Monday API token. Stored only in this browser (localStorage) and sent only to <code>api.monday.com</code>.
+      Generate one in Monday: avatar &rarr; Developers &rarr; My access tokens.
+    </div>
+    <div id="mm_saved_block" style="display:none"><div id="mm_saved" class="token-saved"></div></div>
+    <label for="mm_token">API token</label>
+    <input id="mm_token" type="password" placeholder="Paste token (eyJ... or similar)" autocomplete="off" spellcheck="false">
+    <div class="modal-actions">
+      <button id="mm_clear" class="sec left" type="button">Clear saved</button>
+      <button id="mm_cancel" class="sec" type="button">Cancel</button>
+      <button id="mm_save" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- PDF.js for reading PDFs; html2canvas + jsPDF (loaded separately so their globals are reliably exposed) for generating the IO PDF; Tesseract.js lazy-loaded for OCR fallback -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -263,6 +318,119 @@ const CHANNELS = [
   {label:"(none)",               row:null,rate:null}
 ];
 
+/* ==== Monday.com integration ====
+   Column IDs on the "🟨Ax Submissions" board (8887555175), discovered via the Monday MCP.
+   The tool POSTs directly to api.monday.com with the user's personal API token (stored in
+   localStorage). No server, no proxy, nothing leaves the user's machine besides the request to Monday. */
+const MONDAY_BOARD_ID = "8887555175";
+const MONDAY_COLS = {
+  agency:        "text_mkq83dbn",       // "Agency Assignment"
+  campaign:      "text_mks7y1v8",       // "Campaign Name or Project Name"
+  budget:        "numeric_mkq88463",    // "Budget"
+  flightDates:   "timerange_mkq87hhy",  // "Flight Dates" (timeline)
+  geo:           "long_text_mkq8d77m",  // "Geography"
+  channels:      "dropdown_mkq84xj6",   // "Channels"
+  landingPage:   "link_mkq8qmtp",       // "Landing Page"
+  audience:      "long_textu6nsuddk",   // "Audience Description"
+  notes:         "long_text_mkq8gm4p",  // "General Notes" (Additional Notes on the form)
+  submittedBy:   "text_mkq03p1y",       // "Submitted By"
+  proposalNeeds: "color_mkqjypqc",      // "Proposal Needs" status
+};
+const TOKEN_KEY = "axm_io_monday_token";
+
+function getMondayToken(){ try { return localStorage.getItem(TOKEN_KEY) || ""; } catch(e){ return ""; } }
+function setMondayToken(t){ try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch(e){} }
+function tokenTail(t){ return t && t.length > 4 ? '\u2022\u2022\u2022\u2022' + t.slice(-4) : ''; }
+
+async function fetchMondayItem(itemId){
+  const token = getMondayToken();
+  if(!token) throw new Error("No Monday API token saved. Click the gear icon to configure.");
+  if(!/^\d+$/.test(String(itemId).trim())) throw new Error("Item ID must be numeric.");
+
+  const query = `query ($ids: [ID!]) {
+    items(ids: $ids) {
+      id name
+      column_values { id text value }
+    }
+  }`;
+  const res = await fetch('https://api.monday.com/v2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': token, 'API-Version': '2024-01' },
+    body: JSON.stringify({ query, variables: { ids: [String(itemId).trim()] } })
+  });
+  if(!res.ok){
+    const body = await res.text().catch(()=>'');
+    throw new Error(`Monday API HTTP ${res.status}: ${body.slice(0,120)}`);
+  }
+  const data = await res.json();
+  if(data.errors && data.errors.length){
+    throw new Error("Monday API error: " + data.errors.map(e => e.message).join('; '));
+  }
+  const item = data.data && data.data.items && data.data.items[0];
+  if(!item) throw new Error(`Item ${itemId} not found (check the ID and that your token has access to the Ax Submissions board).`);
+  return item;
+}
+
+/* Map a Monday item to the autofiller's form fields. */
+function applyMondayItem(item){
+  // Flatten column_values into an { id -> text } map
+  const cv = {};
+  for(const c of item.column_values) cv[c.id] = c.text;
+
+  // Advertiser = item name
+  $("f_advertiser").value = item.name || "";
+  $("f_agency").value      = cv[MONDAY_COLS.agency]     || "AxMedia";
+  $("f_campaign").value    = cv[MONDAY_COLS.campaign]   || "";
+  $("f_budget").value      = (cv[MONDAY_COLS.budget] || "").replace(/[^0-9.]/g, "");
+  $("f_landing").value     = cv[MONDAY_COLS.landingPage] || "";
+  $("f_geo").value         = cv[MONDAY_COLS.geo]        || "";
+  $("f_tactics").value     = cv[MONDAY_COLS.audience]   || "";
+  $("f_medianotes").value  = cv[MONDAY_COLS.notes]      || "";
+
+  // Flight dates come as "2026-04-20 - 2026-05-03" (ISO range)
+  const fd = cv[MONDAY_COLS.flightDates] || "";
+  const m = fd.match(/^(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})$/);
+  if(m){
+    $("f_start").value = m[1];
+    $("f_end").value = m[2];
+    if(!$("f_titledate").value) $("f_titledate").value = m[1];
+  } else if(/^\d{4}-\d{2}-\d{2}$/.test(fd)){
+    $("f_start").value = fd;
+    if(!$("f_titledate").value) $("f_titledate").value = fd;
+  }
+
+  // Channels come as comma-separated labels like "Native, Display, Facebook / Instagram"
+  const chansText = cv[MONDAY_COLS.channels] || "";
+  if(chansText){
+    // Reuse the substring channel scanner from the PDF path
+    const text = ' ' + chansText.toLowerCase().replace(/\s+/g, ' ') + ' ';
+    const keys = Object.keys(FORM_CHANNEL_MAP).sort((a, b) => b.length - a.length);
+    const mapped = [];
+    const consumed = [];
+    for(const k of keys){
+      let from = 0;
+      while(true){
+        const i = text.indexOf(k, from);
+        if(i < 0) break;
+        const before = text[i - 1] || ' ';
+        const after = text[i + k.length] || ' ';
+        const isBoundary = c => !/[a-z0-9]/.test(c);
+        if(isBoundary(before) && isBoundary(after) && !consumed.some(([s,e]) => i < e && i + k.length > s)){
+          const tgt = FORM_CHANNEL_MAP[k];
+          if(tgt && !mapped.includes(tgt)) mapped.push(tgt);
+          consumed.push([i, i + k.length]);
+        }
+        from = i + k.length;
+      }
+    }
+    if(mapped.length) setChannelList(mapped);
+  }
+
+  autoSuggestCpmIfEmpty();
+  renderPreview();
+  return Object.keys(cv).length;  // rough "fields populated" count
+}
+
 /* Submission-form channel label -> our channel label */
 const FORM_CHANNEL_MAP = {
   "display":"Display Banners",
@@ -281,7 +449,8 @@ const FORM_CHANNEL_MAP = {
   "audio":"Streaming Audio",
   "streaming audio":"Streaming Audio",
   "dooh":"pDOOH",
-  "pdooh":"pDOOH"
+  "pdooh":"pDOOH",
+  "digital out of home":"pDOOH"
 };
 
 /* ==== Populate the channel selects ==== */
@@ -1091,6 +1260,78 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   $("suggestcpm").onclick = suggestCPM;
   $("download").onclick = generatePdf;
+
+  /* ==== Monday integration wiring ==== */
+  function refreshMondayHint(){
+    const hint = $("monday_hint");
+    const t = getMondayToken();
+    if(t){
+      hint.className = 'monday-hint ok';
+      hint.innerHTML = `Connected to Monday (token ending <code style="background:var(--panel-2);padding:1px 5px;border-radius:4px;font-size:11.5px">${tokenTail(t)}</code>) \u00b7 paste an item ID above and click Fetch.`;
+    } else {
+      hint.className = 'monday-hint';
+      hint.innerHTML = `No Monday connection yet. Click the \u2699 icon to paste your API token, then fetch any item from the <code style="background:var(--panel-2);padding:1px 5px;border-radius:4px;font-size:11.5px">\ud83d\udfe8Ax Submissions</code> board.`;
+    }
+  }
+  refreshMondayHint();
+
+  // Fetch button / Enter key
+  async function doMondayFetch(){
+    const idRaw = $("monday_item").value.trim();
+    if(!idRaw){ alert("Enter a Monday item ID first."); return; }
+    // Accept a full URL and pull the trailing number out
+    const id = (idRaw.match(/(\d{6,})/) || [,idRaw])[1];
+    const s = $("status"); s.style.display="block"; s.className="status"; s.innerHTML = '<span class="spin"></span>Fetching from Monday…';
+    dzState('working', `Fetching item ${id}…`, 'Reading from Monday API');
+    try {
+      const item = await fetchMondayItem(id);
+      applyMondayItem(item);
+      dzState('loaded', item.name || `Item ${id}`, `Loaded from Monday \u00b7 review and edit below`);
+      s.className = "status ok"; s.textContent = `Loaded "${item.name}" from Monday.`;
+    } catch (err) {
+      console.error(err);
+      dzState('idle');
+      s.className = "status err"; s.textContent = err.message;
+    }
+  }
+  $("monday_fetch").onclick = doMondayFetch;
+  $("monday_item").addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); doMondayFetch(); } });
+
+  // Settings modal open/close + save/clear
+  const modal = $("monday_modal");
+  function openModal(){
+    const t = getMondayToken();
+    if(t){
+      $("mm_saved_block").style.display = '';
+      $("mm_saved").textContent = `Token saved (ends in ${tokenTail(t)})`;
+    } else {
+      $("mm_saved_block").style.display = 'none';
+    }
+    $("mm_token").value = '';
+    modal.style.display = 'flex';
+    setTimeout(() => $("mm_token").focus(), 50);
+  }
+  function closeModal(){ modal.style.display = 'none'; $("mm_token").value = ''; }
+  $("monday_settings").onclick = openModal;
+  $("mm_cancel").onclick = closeModal;
+  modal.addEventListener('click', e => { if(e.target === modal) closeModal(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && modal.style.display !== 'none') closeModal(); });
+  $("mm_save").onclick = () => {
+    const t = $("mm_token").value.trim();
+    if(!t){ alert("Paste a token first (or click Clear saved to remove the existing one)."); return; }
+    setMondayToken(t);
+    refreshMondayHint();
+    closeModal();
+    const s = $("status"); s.style.display="block"; s.className="status ok"; s.textContent = "Monday token saved.";
+  };
+  $("mm_clear").onclick = () => {
+    if(!confirm("Remove the saved Monday token from this browser?")) return;
+    setMondayToken("");
+    refreshMondayHint();
+    closeModal();
+    const s = $("status"); s.style.display="block"; s.className="status"; s.textContent = "Monday token cleared.";
+  };
+
   $("copyjson").onclick = () => {
     const obj = {
       advertiser:$("f_advertiser").value, agency:$("f_agency").value, campaign:$("f_campaign").value,
