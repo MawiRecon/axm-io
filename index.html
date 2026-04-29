@@ -239,9 +239,63 @@
     <div class="row"><label>Name/Attn</label><input id="f_attn" type="text" value="bmont@axmediateam.com"></div>
   </details>
 
+  <details style="margin-top:10px"><summary>Pipedrive defaults (used when creating a deal)</summary>
+    <div class="row"><label>Pipedrive Org ID</label><input id="pd_org_id" type="number" value="81"><span class="hint" style="grid-column:2">Default: AxMedia (81). Override per deal if needed.</span></div>
+    <div class="row"><label>Person ID</label><input id="pd_person_id" type="number" value="178"><span class="hint" style="grid-column:2">Default: Brad Mont @ AxMedia (178).</span></div>
+    <div class="row"><label>Source origin</label>
+      <select id="pd_origin">
+        <option value="ManuallyCreated" selected>Manually created</option>
+        <option value="Import">Import</option>
+        <option value="API">API</option>
+        <option value="Automation">Automation</option>
+        <option value="Marketplace">Marketplace</option>
+        <option value="Prospector">Prospector</option>
+        <option value="LeadSuggestion">Lead suggestions</option>
+        <option value="WebForms">Web Forms</option>
+        <option value="Chatbot">Chatbot</option>
+        <option value="LiveChat">Live Chat</option>
+        <option value="WebVisitors">Web Visitors</option>
+        <option value="Campaigns">Campaigns</option>
+        <option value="MessagingInbox">Messaging inbox</option>
+      </select>
+    </div>
+    <div class="row"><label>Anything New?</label>
+      <select id="pd_anything_new"><option value="yes" selected>Yes</option><option value="no">No</option></select>
+    </div>
+    <div class="row"><label>Email Proposal?</label>
+      <select id="pd_email_proposal"><option value="yes">Yes</option><option value="no" selected>No</option></select>
+    </div>
+    <div class="row"><label>Primary KPI</label>
+      <select id="pd_primary_kpi" multiple size="4" style="height:auto;min-height:80px">
+        <option value="Client / Customer Acquisition">Client / Customer Acquisition</option>
+        <option value="Qualified Leads">Qualified Leads</option>
+        <option value="Cost-per-Lead">Cost-per-Lead</option>
+        <option value="Cost-per-Action">Cost-per-Action</option>
+        <option value="Click-Through-Rate">Click-Through-Rate</option>
+        <option value="Video Completion Rate">Video Completion Rate</option>
+        <option value="Page Visits">Page Visits</option>
+        <option value="Page Actions">Page Actions</option>
+        <option value="ROAS">ROAS</option>
+        <option value="Reach">Reach</option>
+        <option value="Sales / Conversions">Sales / Conversions</option>
+      </select>
+      <span class="hint" style="grid-column:2">Cmd/Ctrl-click for multi-select. Sent as Pipedrive Primary KPI.</span>
+    </div>
+    <div class="row"><label>Tactics</label>
+      <select id="pd_tactics" multiple size="3" style="height:auto;min-height:60px">
+        <option value="CRM List">CRM List</option>
+        <option value="Prospecting">Prospecting</option>
+        <option value="Retargeting">Retargeting</option>
+      </select>
+      <span class="hint" style="grid-column:2">Sent as Pipedrive Tactics. (IO Tactics text field is freeform and stays in the IO PDF only.)</span>
+    </div>
+  </details>
+
   <div class="actions" style="margin-top:16px">
     <button id="download">Generate &amp; download IO.pdf</button>
+    <button id="create_deal">Create Pipedrive deal</button>
     <button id="copyjson" class="sec">Copy mapping as JSON</button>
+    <button id="pipedrive_settings" class="sec" type="button" title="Configure Pipedrive connection">⚙ Pipedrive</button>
   </div>
   <div id="status" class="status" style="display:none"></div>
 </div>
@@ -298,6 +352,29 @@
   </div>
 </div>
 
+<!-- Pipedrive connection settings modal -->
+<div id="pipedrive_modal" class="modal-scrim" style="display:none" role="dialog" aria-modal="true" aria-labelledby="pm_title">
+  <div class="modal">
+    <h3 id="pm_title">Pipedrive connection</h3>
+    <div class="mdesc">
+      Paste your personal Pipedrive API token and your company subdomain. Both stored only in this browser
+      (localStorage) and sent only to <code>api.pipedrive.com</code>. Generate a token in Pipedrive: avatar
+      &rarr; Personal preferences &rarr; API.
+    </div>
+    <div id="pm_saved_block" style="display:none"><div id="pm_saved" class="token-saved"></div></div>
+    <label for="pm_company">Company subdomain</label>
+    <input id="pm_company" type="text" placeholder="e.g. grapeseedmedia (the part before .pipedrive.com)" autocomplete="off" spellcheck="false">
+    <div style="height:10px"></div>
+    <label for="pm_token">API token</label>
+    <input id="pm_token" type="password" placeholder="Paste token" autocomplete="off" spellcheck="false">
+    <div class="modal-actions">
+      <button id="pm_clear" class="sec left" type="button">Clear saved</button>
+      <button id="pm_cancel" class="sec" type="button">Cancel</button>
+      <button id="pm_save" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- PDF.js for reading PDFs; html2canvas + jsPDF (loaded separately so their globals are reliably exposed) for generating the IO PDF; Tesseract.js lazy-loaded for OCR fallback -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -318,25 +395,127 @@ const CHANNELS = [
   {label:"(none)",               row:null,rate:null}
 ];
 
-/* ==== Monday.com integration ====
-   Column IDs on the "🟨Ax Submissions" board (8887555175), discovered via the Monday MCP.
-   The tool POSTs directly to api.monday.com with the user's personal API token (stored in
-   localStorage). No server, no proxy, nothing leaves the user's machine besides the request to Monday. */
-const MONDAY_BOARD_ID = "8887555175";
-const MONDAY_COLS = {
-  agency:        "text_mkq83dbn",       // "Agency Assignment"
-  campaign:      "text_mks7y1v8",       // "Campaign Name or Project Name"
-  budget:        "numeric_mkq88463",    // "Budget"
-  flightDates:   "timerange_mkq87hhy",  // "Flight Dates" (timeline)
-  geo:           "long_text_mkq8d77m",  // "Geography"
-  channels:      "dropdown_mkq84xj6",   // "Channels"
-  landingPage:   "link_mkq8qmtp",       // "Landing Page"
-  audience:      "long_textu6nsuddk",   // "Audience Description"
-  notes:         "long_text_mkq8gm4p",  // "General Notes" (Additional Notes on the form)
-  submittedBy:   "text_mkq03p1y",       // "Submitted By"
-  proposalNeeds: "color_mkqjypqc",      // "Proposal Needs" status
+/* ==== Profiles ====
+   Each client/agency gets a profile. Today only AxMedia is filled in, but functions read from
+   PROFILES[ACTIVE_PROFILE] instead of hardcoding Ax-specific values, so adding new clients later
+   is just dropping a new object into PROFILES (no other code changes). */
+const PROFILES = {
+  axmedia: {
+    label: "AxMedia",
+    monday: {
+      boardId: "8887555175",
+      cols: {
+        agency:        "text_mkq83dbn",       // "Agency Assignment"
+        campaign:      "text_mks7y1v8",       // "Campaign Name or Project Name"
+        budget:        "numeric_mkq88463",    // "Budget"
+        flightDates:   "timerange_mkq87hhy",  // "Flight Dates" (timeline)
+        geo:           "long_text_mkq8d77m",  // "Geography"
+        channels:      "dropdown_mkq84xj6",   // "Channels"
+        landingPage:   "link_mkq8qmtp",       // "Landing Page"
+        audience:      "long_textu6nsuddk",   // "Audience Description"
+        notes:         "long_text_mkq8gm4p",  // "General Notes"
+        submittedBy:   "text_mkq03p1y",       // "Submitted By"
+        proposalNeeds: "color_mkqjypqc",      // "Proposal Needs" status
+      }
+    },
+    pipedrive: {
+      orgId: 81,                              // AxMedia organization
+      personId: 178,                          // Brad Mont @ AxMedia
+      agencyDefault: "AxMedia",
+      // Custom field hashes (workspace-wide, not technically per-profile, but kept here so
+      // a future profile in a different Pipedrive workspace would override them).
+      fields: {
+        advertiser:     "ffc248e842b13345534a3c8ee9f218815bd3594d", // org type
+        campaignName:   "b489edb0aa236a7fa9472e68c117756938233d70", // varchar
+        flightStart:    "68bc9b7ad2f0da73151c189bee945ff863367a37", // date
+        flightEnd:      "5f5ee5f0a9c449adf6136eb372ba7ef86367efb7", // date
+        usBlendedCpm:   "a462fe8420be0c4cf37df3075e8f68d0ac25754b", // monetary
+        jointCpm:       "59b62d4bbb7e993f0b20bbc5f92e0df4267f020e", // double (mirrors CPM, used for Units calc)
+        units:          "810b09f47efc7b9e186cbfcb357d8258729ffc6f", // double
+        channels:       "f9828f1de3d7abeba467a51225b465ab194bb22e", // set
+        tactics:        "b1da0c81e51aa5806088786bd91bbe7423dba164", // set
+        geo:            "06d6705fd055fda3826812309c89b29aa191a5c9", // varchar
+        landingPage:    "faecfa0833a5842bba237db638f190222be06942", // varchar
+        primaryKpi:     "e154f8c539691d3be9d3d9fc6453bb06ee731ed2", // set
+        measurement:    "02c7b3d26a0d0d7c615a64d25d56af190a3a0511", // set
+        environment:    "72f3a1875a12e0506dc627a4d98f4dccb070df6d", // set
+        mediaNotes:     "fbbbd5ed2417ffd6e6065787b1563481f06ecca8", // varchar
+        anythingNew:    "c4558af7b4e27be853bfb76545d32023048a5e26", // enum
+        emailProposal:  "ccfdf82ce3d879cc4e93982d56aa3faace6dc5cd", // enum
+      },
+      // Option-ID lookup for set/enum fields. Built from /v1/dealFields output.
+      options: {
+        anythingNew:   { yes: 33, no: 34 },
+        emailProposal: { yes: 222, no: 223 },
+        // Channels: maps the IO autofiller's channel labels -> Pipedrive Channels option IDs
+        channels: {
+          "Display Banners":      163, // Display
+          "In-Banner Video":      231, // In-Banner Video / In-Stream Video
+          "Native Display":       154,
+          "Native Video":         155,
+          "In-Stream Video":      231,
+          "YouTube":              169,
+          "Streaming Audio":      162, // Digital Audio
+          "Connected TV / OTT":   230, // Connected TV / Portable TV
+          "pDOOH":                228,
+          "Paid Social":          157,
+        },
+        tactics: { "CRM List": 170, "Prospecting": 172, "Retargeting": 173 },
+        primaryKpi: {
+          "Client / Customer Acquisition": 108, "Qualified Leads": 109, "Cost-per-Lead": 110,
+          "Cost-per-Action": 111, "Click-Through-Rate": 112, "Video Completion Rate": 113,
+          "Page Visits": 114, "Page Actions": 115, "ROAS": 116, "Reach": 117,
+          "Sales / Conversions": 118
+        },
+        measurement: {
+          "Completion Rate": 174, "Conversions": 175, "Conversions: App Installs": 176,
+          "Conversions: Buy Ticket Button Clicks": 177, "Conversions: Form Fills": 178,
+          "Conversions: Sales": 179, "Conversions: Ticket Sales": 180, "CPA": 181, "CPM": 182,
+          "CPWI": 183, "CTR": 184, "Impressions": 185, "Instagram Followers": 186,
+          "Landing Page Visits": 187, "Page Visits": 188, "Reach": 189, "ROAS": 190,
+          "Sign Ups": 191, "Social Media Followers": 192, "Subscriptions": 193,
+          "VCR": 194, "Viewability": 195, "Walk-Ins": 196
+        },
+        environment: {
+          "Desktop": 197, "In-App": 198, "Mobile": 199, "Out of Home": 200,
+          "Print": 201, "Tablet": 202, "TV Screens": 203
+        }
+      },
+      // Default values shown on the editable Pipedrive Defaults card. User can override per-deal.
+      defaults: {
+        origin: "ManuallyCreated",            // Pipedrive standard "Source origin"
+        anythingNew: "yes",                   // option key from .options.anythingNew
+        emailProposal: "no",
+        primaryKpi: [],                       // user picks from dropdown each time
+        tactics: [],                          // user picks from dropdown each time
+      }
+    },
+    ioContacts: {
+      primary: "Brad Mont",
+      email:   "bmont@axmediateam.com",
+      billing: "Brad Mont",
+      attn:    "bmont@axmediateam.com",
+    },
+    ioAddress: ["800 West 47th Street", "Suite 200", "Kansas City, MO 64112"],
+  },
+  // Future profile slots:
+  // grapeseed_direct: { ... },
+  // axadvocacy: { ... },
 };
+let ACTIVE_PROFILE = (function(){
+  try { return localStorage.getItem('axm_io_profile') || 'axmedia'; } catch(e) { return 'axmedia'; }
+})();
+function profile(){ return PROFILES[ACTIVE_PROFILE] || PROFILES.axmedia; }
+
+/* ==== Monday.com integration ====
+   Column IDs and board ID come from the active profile. The tool POSTs directly to api.monday.com
+   with the user's personal API token (stored in localStorage). Nothing leaves the user's machine
+   besides the request to Monday's API. */
+const MONDAY_BOARD_ID = profile().monday.boardId;          // legacy alias, retained for clarity
+const MONDAY_COLS = profile().monday.cols;                 // legacy alias
 const TOKEN_KEY = "axm_io_monday_token";
+const PIPEDRIVE_TOKEN_KEY = "axm_io_pipedrive_token";
+const PIPEDRIVE_COMPANY_KEY = "axm_io_pipedrive_company";  // user's company subdomain (e.g., "grapeseedmedia")
 
 function getMondayToken(){ try { return localStorage.getItem(TOKEN_KEY) || ""; } catch(e){ return ""; } }
 function setMondayToken(t){ try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch(e){} }
@@ -429,6 +608,210 @@ function applyMondayItem(item){
   autoSuggestCpmIfEmpty();
   renderPreview();
   return Object.keys(cv).length;  // rough "fields populated" count
+}
+
+/* ==== Pipedrive integration =================================================
+   Direct browser → api.pipedrive.com calls. Token + company subdomain stored in localStorage.
+   Per-deal field mapping comes from the active profile. */
+
+function getPipedriveToken(){ try { return localStorage.getItem(PIPEDRIVE_TOKEN_KEY) || ""; } catch(e){ return ""; } }
+function setPipedriveToken(t){ try { t ? localStorage.setItem(PIPEDRIVE_TOKEN_KEY, t) : localStorage.removeItem(PIPEDRIVE_TOKEN_KEY); } catch(e){} }
+function getPipedriveCompany(){ try { return localStorage.getItem(PIPEDRIVE_COMPANY_KEY) || ""; } catch(e){ return ""; } }
+function setPipedriveCompany(c){ try { c ? localStorage.setItem(PIPEDRIVE_COMPANY_KEY, c) : localStorage.removeItem(PIPEDRIVE_COMPANY_KEY); } catch(e){} }
+
+/* Low-level helper: build the API URL with the token query param. */
+function pdUrl(path, extraQuery){
+  const company = getPipedriveCompany();
+  const token = getPipedriveToken();
+  const sep = path.includes('?') ? '&' : '?';
+  let url = `https://${company}.pipedrive.com/api/v1${path}${sep}api_token=${encodeURIComponent(token)}`;
+  if(extraQuery) url += '&' + extraQuery;
+  return url;
+}
+
+async function pdRequest(method, path, body){
+  if(!getPipedriveToken()) throw new Error("No Pipedrive API token saved.");
+  if(!getPipedriveCompany()) throw new Error("No Pipedrive company subdomain saved.");
+  const opts = { method, headers: { 'Accept': 'application/json' } };
+  if(body){
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(pdUrl(path), opts);
+  let json;
+  try { json = await res.json(); } catch(e) { throw new Error(`Pipedrive returned non-JSON HTTP ${res.status}`); }
+  if(!res.ok || json.success === false){
+    const msg = json && (json.error || json.message) || `HTTP ${res.status}`;
+    throw new Error(`Pipedrive API: ${msg}`);
+  }
+  return json.data;
+}
+
+/* Search-or-create helper for the Advertiser org (named "{Agency} - {Advertiser}"). */
+async function findOrCreateAdvertiserOrg(orgName){
+  // 1. Search by exact name
+  const search = await pdRequest('GET', `/organizations/search?term=${encodeURIComponent(orgName)}&exact_match=true`);
+  const items = search && search.items;
+  if(items && items.length){
+    return { id: items[0].item.id, action: 'linked' };
+  }
+  // 2. Not found — create
+  const created = await pdRequest('POST', '/organizations', { name: orgName });
+  return { id: created.id, action: 'created' };
+}
+
+/* Map a list of IO labels to a comma-separated string of Pipedrive option IDs.
+   `optionMap` is { "Label": id, ... }. Unknown labels are silently dropped. */
+function mapToOptionIds(labels, optionMap){
+  if(!labels || !labels.length) return "";
+  const ids = [];
+  for(const l of labels){
+    const id = optionMap[l];
+    if(id != null && !ids.includes(id)) ids.push(id);
+  }
+  return ids.join(",");
+}
+
+/* Tokenize a freeform CSV string ("Impressions, Reach") and resolve each token to an option ID.
+   Tokens that don't exactly match a key in the option map are dropped (and reported via the
+   returned `dropped` array for status messaging). */
+function mapCsvToOptionIds(csvText, optionMap){
+  if(!csvText) return { ids: "", matched: [], dropped: [] };
+  const tokens = csvText.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+  const matched = [], dropped = [], ids = [];
+  for(const t of tokens){
+    // try exact match first, then case-insensitive
+    let id = optionMap[t];
+    if(id == null){
+      const ciKey = Object.keys(optionMap).find(k => k.toLowerCase() === t.toLowerCase());
+      if(ciKey) id = optionMap[ciKey];
+    }
+    if(id != null){
+      if(!ids.includes(id)) ids.push(id);
+      matched.push(t);
+    } else {
+      dropped.push(t);
+    }
+  }
+  return { ids: ids.join(","), matched, dropped };
+}
+
+/* Build the Pipedrive deal payload from a collectIoValues() snapshot + the editable defaults. */
+function buildDealPayload(values, defaults, advertiserOrgId){
+  const p = profile().pipedrive;
+  const f = p.fields;
+
+  // Combine KPI Measurement + Secondary Measurement into the single Pipedrive Measurement set
+  const combinedMeasurement = [values.kpi, values.secondary].filter(Boolean).join(', ');
+  const measurementResult = mapCsvToOptionIds(combinedMeasurement, p.options.measurement);
+
+  // Environment freeform → set
+  const environmentResult = mapCsvToOptionIds(values.environment, p.options.environment);
+
+  // Channels: already a list of canonical labels from the form
+  const channelsIds = mapToOptionIds(values.channels, p.options.channels);
+
+  // Tactics & Primary KPI: come from defaults (user-selected dropdowns), already arrays of labels
+  const tacticsIds = mapToOptionIds(defaults.tactics || [], p.options.tactics);
+  const primaryKpiIds = mapToOptionIds(defaults.primaryKpi || [], p.options.primaryKpi);
+
+  const payload = {
+    title: values.ioTitle,
+    value: values.budget,
+    currency: 'USD',
+    org_id: defaults.orgId || p.orgId,
+    person_id: defaults.personId || p.personId,
+    origin: defaults.origin || p.defaults.origin,
+    [f.advertiser]:    advertiserOrgId || null,
+    [f.campaignName]:  values.campaign,
+    [f.flightStart]:   values.startDate,
+    [f.flightEnd]:     values.endDate,
+    [f.usBlendedCpm]:  values.cpm,
+    [f.jointCpm]:      values.cpm,
+    [f.units]:         values.minImps != null ? Math.round(values.minImps) : null,
+    [f.channels]:      channelsIds,
+    [f.tactics]:       tacticsIds,
+    [f.geo]:           values.geo,
+    [f.landingPage]:   values.landing,
+    [f.primaryKpi]:    primaryKpiIds,
+    [f.measurement]:   measurementResult.ids,
+    [f.environment]:   environmentResult.ids,
+    [f.mediaNotes]:    values.mediaNotes,
+    [f.anythingNew]:   p.options.anythingNew[defaults.anythingNew] || p.options.anythingNew.yes,
+    [f.emailProposal]: p.options.emailProposal[defaults.emailProposal] || p.options.emailProposal.no,
+  };
+
+  // Strip nulls/empty strings — Pipedrive treats absent fields as "leave blank" cleanly,
+  // whereas explicit nulls/empty can sometimes overwrite existing values.
+  const cleaned = {};
+  for(const k of Object.keys(payload)){
+    if(payload[k] !== null && payload[k] !== undefined && payload[k] !== '') cleaned[k] = payload[k];
+  }
+
+  return {
+    payload: cleaned,
+    measurementMatched: measurementResult.matched,
+    measurementDropped: measurementResult.dropped,
+    environmentMatched: environmentResult.matched,
+    environmentDropped: environmentResult.dropped,
+  };
+}
+
+/* Top-level: collect values, create/link advertiser org, create deal, return summary. */
+async function createPipedriveDeal(){
+  if(!getPipedriveToken() || !getPipedriveCompany()){
+    throw new Error("Pipedrive not connected. Click the Pipedrive gear to set token + company.");
+  }
+  const values = collectIoValues();
+
+  // Validation: title-required minimum
+  if(!values.advertiser) throw new Error("Advertiser is required.");
+  if(!values.agency) throw new Error("Agency is required.");
+  if(!values.campaign) throw new Error("Campaign is required.");
+
+  const defaults = collectPipedriveDefaults();
+
+  // Step 1: search or create the Advertiser org
+  const advOrgName = `${values.agency} - ${values.advertiser}`;
+  const advOrgResult = await findOrCreateAdvertiserOrg(advOrgName);
+
+  // Step 2: build payload
+  const built = buildDealPayload(values, defaults, advOrgResult.id);
+
+  // Step 3: POST /deals
+  const deal = await pdRequest('POST', '/deals', built.payload);
+
+  // Construct deal URL for the success message
+  const dealUrl = `https://${getPipedriveCompany()}.pipedrive.com/deal/${deal.id}`;
+
+  return {
+    deal,
+    dealUrl,
+    advOrgId: advOrgResult.id,
+    advOrgName,
+    advOrgAction: advOrgResult.action,    // "linked" or "created"
+    measurementDropped: built.measurementDropped,
+    environmentDropped: built.environmentDropped,
+  };
+}
+
+/* Read the editable Pipedrive Defaults card values. Some are <select multiple>. */
+function collectPipedriveDefaults(){
+  const multiVals = (id) => {
+    const sel = $(id);
+    if(!sel) return [];
+    return Array.from(sel.selectedOptions).map(o => o.value);
+  };
+  const v = (id) => ($(id) ? $(id).value : '');
+  return {
+    orgId:         parseInt(v('pd_org_id'), 10) || profile().pipedrive.orgId,
+    personId:      parseInt(v('pd_person_id'), 10) || profile().pipedrive.personId,
+    origin:        v('pd_origin') || profile().pipedrive.defaults.origin,
+    anythingNew:   v('pd_anything_new') || 'yes',
+    emailProposal: v('pd_email_proposal') || 'no',
+    primaryKpi:    multiVals('pd_primary_kpi'),
+    tactics:       multiVals('pd_tactics'),
+  };
 }
 
 /* Submission-form channel label -> our channel label */
@@ -692,25 +1075,69 @@ function fmtDate(iso){
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escMultiline(s){ return esc(s).replace(/\n/g,'<br>'); }
 
-function buildIoHtml(){
-  const adv = $("f_advertiser").value.trim();
-  const ag  = $("f_agency").value.trim();
-  const cmp = $("f_campaign").value.trim();
-  const chans = getChannelList();
-  const cpm = parseFloat($("f_cpm").value);
-  const bud = parseFloat($("f_budget").value);
-  const minImps = (bud && cpm) ? (bud/cpm)*1000 : null;
+/* ==== collectIoValues =========================================================
+   Single source of truth for "what's currently in the form". Both buildIoHtml() (PDF render)
+   and createPipedriveDeal() consume this. Reading the DOM in one place means every downstream
+   consumer sees the same snapshot.
+   Returns a typed object — null/empty fields are normalized to null/empty string consistently. */
+function collectIoValues(){
+  const v = (id) => ($(id) ? $(id).value : '');
+  const trimmed = (id) => v(id).trim();
+  const num = (id) => { const n = parseFloat(v(id)); return isNaN(n) ? null : n; };
+  const isoDate = (id) => v(id) || null;
 
-  const td = $("f_titledate").value;
-  const monYear = td ? new Date(td+'T00:00:00').toLocaleString('en-US',{month:'short',year:'numeric'}) : '';
-  const ioName = [ag, adv, cmp, monYear].filter(Boolean).join(' | ');
+  const advertiser = trimmed('f_advertiser');
+  const agency     = trimmed('f_agency');
+  const campaign   = trimmed('f_campaign');
+  const channels   = getChannelList();
+  const budget     = num('f_budget');
+  const cpm        = num('f_cpm');
+  const minImps    = (budget && cpm) ? (budget / cpm) * 1000 : null;
+  const titleDate  = isoDate('f_titledate');
+  const startDate  = isoDate('f_start');
+  const endDate    = isoDate('f_end');
+  const monYear    = titleDate
+    ? new Date(titleDate + 'T00:00:00').toLocaleString('en-US', {month:'short', year:'numeric'})
+    : '';
+  const ioTitle    = [agency, advertiser, campaign, monYear].filter(Boolean).join(' | ');
+
+  return {
+    advertiser, agency, campaign, channels,
+    budget, cpm, minImps,
+    titleDate, startDate, endDate, monYear, ioTitle,
+    flightNotes: v('f_flightnotes'),
+    landing:     v('f_landing'),
+    geo:         v('f_geo'),
+    tactics:     v('f_tactics'),
+    environment: v('f_environment'),
+    goal:        v('f_goal'),
+    kpi:         v('f_kpi'),
+    secondary:   v('f_secondary'),
+    mediaNotes:  v('f_medianotes'),
+    contacts: {
+      primary: v('f_primary'),
+      email:   v('f_email'),
+      billing: v('f_billing'),
+      attn:    v('f_attn'),
+    },
+  };
+}
+
+function buildIoHtml(v){
+  v = v || collectIoValues();   // defensive: callers can pass a snapshot or rely on a fresh read
 
   const today = new Date();
   const todayStr = `${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
 
   // Pad channel list to 7 rows max for layout consistency
-  const chanRows = chans.slice(0,7);
+  const chanRows = v.channels.slice(0, 7);
   while(chanRows.length < 7) chanRows.push('');
+
+  // Local aliases so the existing template strings keep working without big rewrites
+  const adv = v.advertiser, ag = v.agency, cmp = v.campaign;
+  const cpm = v.cpm, bud = v.budget, minImps = v.minImps;
+  const ioName = v.ioTitle;
+  const addr = profile().ioAddress; // [line1, line2, line3]
 
   // The split point: BILLING column starts at 68% (after Channels+CPM+Budget+ImpsCol+IOFlight cols).
   // Layout totals: Channels 10% + CPM 14% + Imps 14% + Budget 14% + Flight lbl 8% + Flight val 10% = 70%; Total 30%.
@@ -729,23 +1156,23 @@ function buildIoHtml(){
       </colgroup>
       <tr>
         <td class="lbl">CREATED</td><td>${esc(todayStr)}</td>
-        <td class="rlbl">PRIMARY CONTACT</td><td>${esc($("f_primary").value)}</td>
+        <td class="rlbl">PRIMARY CONTACT</td><td>${esc(v.contacts.primary)}</td>
         <td class="rlbl">CONTACT ADDRESS</td><td class="italic">Invoice via Email Delivery</td>
       </tr>
       <tr>
         <td class="lbl">ADVERTISER</td><td>${esc(adv)}</td>
-        <td class="rlbl">EMAIL</td><td>${esc($("f_email").value)}</td>
-        <td></td><td>800 West 47th Street</td>
+        <td class="rlbl">EMAIL</td><td>${esc(v.contacts.email)}</td>
+        <td></td><td>${esc(addr[0]||'')}</td>
       </tr>
       <tr>
         <td class="lbl">AGENCY</td><td>${esc(ag)}</td>
-        <td class="rlbl">BILLING</td><td>${esc($("f_billing").value)}</td>
-        <td></td><td>Suite 200</td>
+        <td class="rlbl">BILLING</td><td>${esc(v.contacts.billing)}</td>
+        <td></td><td>${esc(addr[1]||'')}</td>
       </tr>
       <tr>
         <td class="lbl">CAMPAIGN</td><td>${esc(cmp)}</td>
-        <td class="rlbl">NAME/ATTN</td><td>${esc($("f_attn").value)}</td>
-        <td></td><td>Kansas City, MO 64112</td>
+        <td class="rlbl">NAME/ATTN</td><td>${esc(v.contacts.attn)}</td>
+        <td></td><td>${esc(addr[2]||'')}</td>
       </tr>
     </table>
 
@@ -773,17 +1200,17 @@ function buildIoHtml(){
         <td class="big-ctr" rowspan="7" style="vertical-align:middle">${cpm ? fmtMoney2(cpm) : ''}</td>
         <td class="big-ctr" rowspan="7" style="vertical-align:middle">${minImps!=null?fmtInt0(minImps):''}</td>
         <td class="big-ctr" rowspan="7" style="vertical-align:middle">${bud?fmtMoney2(bud):''}</td>
-        <td class="rlbl">Start</td><td>${fmtDate($("f_start").value)}</td>
+        <td class="rlbl">Start</td><td>${fmtDate(v.startDate)}</td>
         <td class="rlbl">Min. Impressions:</td><td>${minImps!=null?fmtInt0(minImps):''}</td>
       </tr>
       <tr>
         <td>${esc(chanRows[1])}</td>
-        <td class="rlbl">End</td><td>${fmtDate($("f_end").value)}</td>
+        <td class="rlbl">End</td><td>${fmtDate(v.endDate)}</td>
         <td class="rlbl">Blended eCPM:</td><td>${cpm ? fmtMoney2(cpm) : ''}</td>
       </tr>
       <tr>
         <td>${esc(chanRows[2])}</td>
-        <td class="rlbl">Flight Notes:</td><td>${esc($("f_flightnotes").value)}</td>
+        <td class="rlbl">Flight Notes:</td><td>${esc(v.flightNotes)}</td>
         <td class="rlbl">Billing Terms:</td><td>Net 30</td>
       </tr>
       <tr>
@@ -819,20 +1246,20 @@ function buildIoHtml(){
         <col style="width:30%">
       </colgroup>
       <tr>
-        <td class="rlbl">Landing Page</td><td>${esc($("f_landing").value)}</td>
-        <td class="rlbl">Primary Goal</td><td>${esc($("f_goal").value)}</td>
-        <td class="notes-cell" rowspan="4">${escMultiline($("f_medianotes").value)}</td>
+        <td class="rlbl">Landing Page</td><td>${esc(v.landing)}</td>
+        <td class="rlbl">Primary Goal</td><td>${esc(v.goal)}</td>
+        <td class="notes-cell" rowspan="4">${escMultiline(v.mediaNotes)}</td>
       </tr>
       <tr>
-        <td class="rlbl">Tactics</td><td>${esc($("f_tactics").value)}</td>
-        <td class="rlbl">KPI Measurement</td><td>${esc($("f_kpi").value)}</td>
+        <td class="rlbl">Tactics</td><td>${esc(v.tactics)}</td>
+        <td class="rlbl">KPI Measurement</td><td>${esc(v.kpi)}</td>
       </tr>
       <tr>
-        <td class="rlbl">Environment</td><td>${esc($("f_environment").value)}</td>
-        <td class="rlbl">Secondary Measurement</td><td>${esc($("f_secondary").value)}</td>
+        <td class="rlbl">Environment</td><td>${esc(v.environment)}</td>
+        <td class="rlbl">Secondary Measurement</td><td>${esc(v.secondary)}</td>
       </tr>
       <tr>
-        <td class="rlbl">Geo</td><td>${esc($("f_geo").value)}</td>
+        <td class="rlbl">Geo</td><td>${esc(v.geo)}</td>
         <td></td><td></td>
       </tr>
     </table>
@@ -914,12 +1341,12 @@ async function generatePdf(){
     return;
   }
 
+  // Snapshot form once. PDF render (and later Pipedrive create) both consume the same snapshot.
+  const values = collectIoValues();
+
   // Build filename
-  const ag  = $("f_agency").value.trim();
-  const adv = $("f_advertiser").value.trim();
-  const cmp = $("f_campaign").value.trim();
   const safe = s => (s || 'IO').replace(/[\\\/:*?"<>|]/g,'').trim();
-  const fname = `IO_${safe(ag)}_${safe(adv)}_${safe(cmp)}.pdf`.replace(/\s+/g,'_');
+  const fname = `IO_${safe(values.agency)}_${safe(values.advertiser)}_${safe(values.campaign)}.pdf`.replace(/\s+/g,'_');
 
   // Show a shield so the user doesn't see the iframe flicker
   const shield = document.createElement('div');
@@ -939,7 +1366,7 @@ async function generatePdf(){
     // Write a self-contained HTML doc into the iframe
     const idoc = iframe.contentDocument;
     idoc.open();
-    idoc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>${IO_RENDER_CSS}</style></head><body><div id="io" class="io-render">${buildIoHtml()}</div></body></html>`);
+    idoc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>${IO_RENDER_CSS}</style></head><body><div id="io" class="io-render">${buildIoHtml(values)}</div></body></html>`);
     idoc.close();
 
     // Wait for iframe to fully render
@@ -1330,6 +1757,64 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshMondayHint();
     closeModal();
     const s = $("status"); s.style.display="block"; s.className="status"; s.textContent = "Monday token cleared.";
+  };
+
+  /* ==== Pipedrive modal + Create Deal wiring ==== */
+  const pdModal = $("pipedrive_modal");
+  function openPdModal(){
+    const t = getPipedriveToken(), c = getPipedriveCompany();
+    if(t){
+      $("pm_saved_block").style.display = '';
+      $("pm_saved").textContent = `Token saved (ends in ${tokenTail(t)}) ${c ? '· company: ' + c : ''}`;
+    } else {
+      $("pm_saved_block").style.display = 'none';
+    }
+    $("pm_token").value = '';
+    $("pm_company").value = c || '';
+    pdModal.style.display = 'flex';
+    setTimeout(() => $("pm_company").focus(), 50);
+  }
+  function closePdModal(){ pdModal.style.display = 'none'; $("pm_token").value = ''; }
+  $("pipedrive_settings").onclick = openPdModal;
+  $("pm_cancel").onclick = closePdModal;
+  pdModal.addEventListener('click', e => { if(e.target === pdModal) closePdModal(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && pdModal.style.display !== 'none') closePdModal(); });
+  $("pm_save").onclick = () => {
+    const t = $("pm_token").value.trim();
+    const c = $("pm_company").value.trim().toLowerCase().replace(/\.pipedrive\.com.*/, '');
+    if(!c){ alert("Enter your company subdomain (e.g., grapeseedmedia)."); return; }
+    if(!t && !getPipedriveToken()){ alert("Paste a token first."); return; }
+    if(t) setPipedriveToken(t);
+    setPipedriveCompany(c);
+    closePdModal();
+    const s = $("status"); s.style.display="block"; s.className="status ok";
+    s.textContent = `Pipedrive connection saved (${c}.pipedrive.com).`;
+  };
+  $("pm_clear").onclick = () => {
+    if(!confirm("Remove the saved Pipedrive token + company from this browser?")) return;
+    setPipedriveToken(""); setPipedriveCompany("");
+    closePdModal();
+    const s = $("status"); s.style.display="block"; s.className="status"; s.textContent = "Pipedrive connection cleared.";
+  };
+
+  $("create_deal").onclick = async () => {
+    const s = $("status"); s.style.display="block"; s.className="status"; s.innerHTML = '<span class="spin"></span>Creating Pipedrive deal…';
+    try {
+      const result = await createPipedriveDeal();
+      const droppedNotes = [];
+      if(result.measurementDropped.length){
+        droppedNotes.push(`Measurement: dropped ${result.measurementDropped.length} unmatched (${result.measurementDropped.join(', ')})`);
+      }
+      if(result.environmentDropped.length){
+        droppedNotes.push(`Environment: dropped ${result.environmentDropped.length} unmatched (${result.environmentDropped.join(', ')})`);
+      }
+      const droppedHtml = droppedNotes.length ? `<br><span style="opacity:.85">${droppedNotes.join(' &middot; ')}</span>` : '';
+      s.className="status ok";
+      s.innerHTML = `Deal #${result.deal.id} created. Advertiser org "${esc(result.advOrgName)}" was <b>${result.advOrgAction}</b>. <a href="${result.dealUrl}" target="_blank" rel="noopener">Open in Pipedrive &rarr;</a>${droppedHtml}`;
+    } catch (err) {
+      console.error(err);
+      s.className="status err"; s.textContent = "Pipedrive error: " + err.message;
+    }
   };
 
   $("copyjson").onclick = () => {

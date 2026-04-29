@@ -6,3 +6,10 @@ Thumbs.db
 node_modules/
 .idea/
 .vscode/
+
+# Belt-and-suspenders: never commit API tokens or schema dumps if one accidentally lands here.
+dealFields.json
+*token*
+*secret*
+*apikey*
+*api_key*
